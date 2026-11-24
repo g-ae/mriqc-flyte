@@ -1,5 +1,5 @@
 # sMRI node table (anatMRIQC)
-Only <mark>MapNode</mark> is `ComputeIQMs.tpms_std2t1w`
+Only <mark>MapNode</mark> is `SpatialNormalizatoin.tpms_std2t1w`
 
 ## Start
 |Sub-workflow|Node name|Interface class|Package|External program|Inputs|
