@@ -1,6 +1,4 @@
-import asyncio
 import flyte
-import numpy as np
 
 env = flyte.TaskEnvironment(name="helloworld")
 
