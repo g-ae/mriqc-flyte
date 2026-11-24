@@ -20,4 +20,4 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""run_interface(), localize(), upload(), working-directory handling"""
+"""Helpers shared by all tasks: run a nipype interface, download inputs, upload outputs."""
