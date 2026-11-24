@@ -35,3 +35,10 @@ def test_flyte_importable():
     import flyte
 
     assert hasattr(flyte, "TaskEnvironment")
+
+
+def test_anat_env_importable():
+    """Anat-env can be imported"""
+    import mriqc_flyte.env
+
+    assert hasattr(mriqc_flyte.env, "anat_env")
