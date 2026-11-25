@@ -54,9 +54,7 @@ def pytest_collection_modifyitems(items):
             if "baseline" in item.keywords:
                 item.add_marker(skip_baseline)
     if not binaries:
-        skip_binaries = pytest.mark.skip(
-            reason="N4BiasFieldCorrection not found in $PATH"
-        )
+        skip_binaries = pytest.mark.skip(reason="N4BiasFieldCorrection not found in $PATH")
         for item in items:
             if "binaries" in item.keywords:
                 item.add_marker(skip_binaries)

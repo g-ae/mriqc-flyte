@@ -33,9 +33,7 @@ from traits.trait_base import _Undefined
 def baseline_node(run: int, subworkflow: str, node: str) -> dict:
     prefix = os.getenv("MRIQC_FLYTE_BASELINE", "/baseline")
 
-    base_path = (
-        Path(prefix) / f"run-{run}" / "work" / "mriqc_wf" / "anatMRIQC" / subworkflow
-    )
+    base_path = Path(prefix) / f"run-{run}" / "work" / "mriqc_wf" / "anatMRIQC" / subworkflow
     glob_results = list(base_path.glob(f"*/{node}/result_{node}.pklz"))
 
     if len(glob_results) == 0:
@@ -53,9 +51,7 @@ def baseline_node(run: int, subworkflow: str, node: str) -> dict:
             result.outputs.output_image.replace("/baseline", prefix)
         )
     if not isinstance(result.outputs.bias_image, _Undefined):
-        result.outputs.bias_image = Path(
-            result.outputs.bias_image.replace("/baseline", prefix)
-        )
+        result.outputs.bias_image = Path(result.outputs.bias_image.replace("/baseline", prefix))
 
     return {
         "inputs": result.inputs,
