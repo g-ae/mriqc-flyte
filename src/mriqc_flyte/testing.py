@@ -60,7 +60,3 @@ def baseline_node(run: int, subworkflow: str, node: str) -> dict:
             "bias_image": result.outputs.bias_image,
         },
     }
-
-
-if __name__ == "__main__":
-    print(baseline_node(1, "synthstrip_wf", "pre_n4"))
