@@ -22,168 +22,95 @@
 #
 """Tests for types that the Flyte tasks return."""
 
-from dataclasses import dataclass
-
 import flyte
-import pytest
 from flyte.io import File
 
-import mriqc_flyte.env
+env = flyte.TaskEnvironment(name="types")
 
 
-# Types
-@dataclass(frozen=True)
-class FileStr:
-    file: File
-    string: str
+def get_test_file(tmp_path, file_name: str = "a.txt"):
+    """Util function that creates a testing file in a temporary directory."""
+    (tmp_path / file_name).write_text("a")
+    return File.from_local_sync(str(tmp_path / file_name))
 
 
-@dataclass
-class FileStrListFile:
-    fstr: FileStr
-    listfile: list[File]
+# Single File
+@env.task
+def pass_file(x: File) -> File:
+    return x
 
 
-# Tasks
-@mriqc_flyte.env.anat_env.task
-async def filestr(fs: FileStr) -> FileStr:
-    return fs
+def test_file(tmp_path):
+    """Test that a file can be serialized for a Flyte task."""
+    f = get_test_file(tmp_path)
+    out = flyte.run(pass_file, x=f).outputs()[0]  # outputs() is a tuple
+    assert out.path == f.path  # == on two Files also compares hidden state
 
 
-@mriqc_flyte.env.anat_env.task
-async def filestr_listfile(f: FileStrListFile) -> FileStrListFile:
-    return f
+# Optional File
+@env.task
+def file_none(x: File | None) -> File | None:
+    return x
 
 
-@mriqc_flyte.env.anat_env.task
-async def file_none(f: File | None) -> File | None:
-    return f
+def test_file_optional_file(tmp_path):
+    """Test that a file can be serialized for a "File | None" input for a Flyte task."""
+    f = get_test_file(tmp_path)
+    out = flyte.run(file_none, x=f).outputs()[0]  # outputs() is a tuple
+    assert out.path == f.path  # == on two Files also compares hidden state
 
 
-@mriqc_flyte.env.anat_env.task
-async def listfile(lf: list[File]) -> list[File]:
-    return lf
+def test_file_optional_none():
+    """Test that "None" can be used for a "File | None" input for a Flyte task."""
+    out = flyte.run(file_none, x=None).outputs()[0]
+    assert out is None
 
 
-@mriqc_flyte.env.anat_env.task
-async def dict_str_float(d: dict[str, float]) -> dict[str, float]:
+# list[File]
+@env.task
+def listfile(x: list[File]) -> list[File]:
+    return x
+
+
+def test_list_file(tmp_path):
+    """Test that a list of Files can be correctly serialized and sent through a Flyte task"""
+    files = [get_test_file(tmp_path, f"{i}.txt") for i in range(5)]
+    out = flyte.run(listfile, x=files).outputs()[0]  # outputs() is a tuple
+    right = [files[i].path == out[i].path for i in range(len(out))]
+    set_right = set(right)
+    assert len(out) == len(files) and len(set_right) == 1 and set_right.pop()
+
+
+# dict[str, float | int]
+@env.task
+def dict_str_float_int(d: dict[str, float | int]) -> dict[str, float | int]:
     return d
 
 
-# Tests
-@pytest.fixture
-def sample_file() -> File:
-    with open("tmpfile.txt", "a") as f:
-        f.write("File content\n")
+def test_dataclass_dict_str_float_or_int():
+    """dict[str, float | int] can be used as an input and return type while running flyte.run()."""
+    d = {"a": 1.2, "b": 5.4, "c": 62}
+    outputs = flyte.run(dict_str_float_int, d).outputs()[0]
 
-    return File(path="tmpfile.txt")
+    # are types right?
+    right = [type(d[i]) is type(outputs[i]) for i in outputs]
+    right_set = set(right)
 
-
-## FileStr dataclass
-@pytest.mark.asyncio
-async def test_dataclass_filestr_direct(sample_file):
-    """Frozen dataclass "FileStr" can be used as an input and return type,
-    while running directly."""
-    fs = FileStr(sample_file, "testString")
-
-    assert isinstance(await filestr(fs), FileStr)
+    assert isinstance(outputs, dict) and len(right_set) == 1 and right_set.pop()
 
 
-@pytest.mark.asyncio
-async def test_dataclass_filestr_flyterun(sample_file):
-    """Frozen dataclass "FileStr" can be used as an input and return type,
-    while runnign through flyte.run()."""
-    fs = FileStr(sample_file, "testString")
-
-    run = flyte.run(filestr, fs)
-
-    assert isinstance(run.outputs()[0], FileStr)
+# Two outputs (tuple)
+@env.task
+def two_outputs(x: int) -> tuple[int, str]:
+    return x, str(x)
 
 
-## FileStrListFile dataclass
-@pytest.mark.asyncio
-async def test_dataclass_filestrlistfile_direct(sample_file):
-    """Dataclass "FileStrListFile" can be used as an input and return type,
-    while running directly."""
-    fs = FileStr(sample_file, "testString")
-
-    dc = FileStrListFile(fs, [sample_file, sample_file])
-
-    assert isinstance(await filestr_listfile(dc), FileStrListFile)
-
-
-@pytest.mark.asyncio
-async def test_dataclass_filestrlistfile_flyterun(sample_file):
-    """Dataclass "FileStrListFile" can be used as an input and return type,
-    while running thorugh flyte.run()."""
-    fs = FileStr(sample_file, "testString")
-
-    dc = FileStrListFile(fs, [sample_file, sample_file])
-
-    run = flyte.run(filestr_listfile, dc)
-
-    assert isinstance(run.outputs()[0], FileStrListFile)
-
-
-## File | None
-@pytest.mark.asyncio
-async def test_dataclass_filenone_file_direct(sample_file):
-    """File | None can be used as an input and return type (sending a file)
-    while running directly."""
-    assert isinstance(await file_none(sample_file), File)
-
-
-@pytest.mark.asyncio
-async def test_dataclass_filenone_none_direct():
-    """File | None can be used as an input and return type (sending nothing)
-    while running directly."""
-    assert isinstance(await file_none(None), File | None)
-
-
-@pytest.mark.asyncio
-async def test_dataclass_filenone_file_flyterun(sample_file):
-    """File | None can be used as an input and return type (sending a file)
-    while running through flyte.run()."""
-    run = flyte.run(file_none, sample_file)
-
-    assert isinstance(run.outputs()[0], File)
-
-
-@pytest.mark.asyncio
-async def test_dataclass_filenone_none_flyterun():
-    """File | None can be used as an input and return type (sending nothing)
-    while running through flyte.run()."""
-    run = flyte.run(file_none, None)
-
-    assert isinstance(run.outputs()[0], File | None)
-
-
-## list[File]
-@pytest.mark.asyncio
-async def test_dataclass_listfile_direct(sample_file):
-    """list[File] can be used as an input and return type while running directly."""
-    assert isinstance(await listfile([sample_file, sample_file]), list)
-
-
-@pytest.mark.asyncio
-async def test_dataclass_listfile_flyterun(sample_file):
-    """list[File] can be used as an input and return type while running flyte.run()."""
-    run = flyte.run(listfile, [sample_file, sample_file])
-
-    assert isinstance(run.outputs()[0], list)
-
-
-## dict[str, float]
-@pytest.mark.asyncio
-async def test_dataclass_dictstrfloat_direct():
-    """dict[str, float] can be used as an input and return type while running directly."""
-    d = {"a": 1.2, "b": 5.4}
-    assert isinstance(await dict_str_float(d), dict)
-
-
-@pytest.mark.asyncio
-async def test_dataclass_dictstrfloat_flyterun():
-    """dict[str, float] can be used as an input and return type while running flyte.run()."""
-    d = {"a": 1.2, "b": 5.4}
-    run = flyte.run(dict_str_float, d)
-    assert isinstance(run.outputs()[0], dict)
+def test_tuple():
+    """Tuples are returned correctly from Flyte tasks"""
+    test_val = 3
+    run = flyte.run(two_outputs, x=test_val)
+    assert (
+        len(run.outputs()) == 2
+        and run.outputs()[0] == test_val
+        and run.outputs()[1] == str(test_val)
+    )
