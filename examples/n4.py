@@ -1,45 +1,49 @@
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
+import flyte
 from flyte.io import File
 
-from mriqc_flyte.env import anat_env
+env = flyte.TaskEnvironment(name="n4")
 
 
-@anat_env.task(cache="auto")
-async def n4(in_file: File, work_dir: Path) -> File:
-    local_path = await in_file.download()
-    print(local_path)
+@env.task
+async def n4(in_file: File) -> File:
+    """Correct the intensity non-uniformity of ``in_file``."""
+    in_path = await in_file.download()
 
-    work_dir = work_dir / "n4"
-    work_dir.mkdir(parents=True, exist_ok=True)
-
-    file_uri = work_dir / "test.nii.gz"
+    workdir = tempfile.mkdtemp(prefix="n4-")
+    out_path = str(Path(workdir) / "corrected.nii.gz")
 
     # fmt: off
     cmd = [
         "N4BiasFieldCorrection",
         "-d", "3",
-        "-i", local_path,
-        "-o", file_uri,
+        "-i", in_path,
+        "-o", out_path,
     ]
 
     # fmt: on
     subprocess.run(cmd, check=True)
 
-    out_file = await File.from_local(file_uri)
-    return out_file
+    return await File.from_local(out_path)
 
 
-@anat_env.task
-async def print_local_path(in_file: File) -> None:
-    print("Remote path:", in_file.path)
-    local_path = await in_file.download()
-    print("Local path:", local_path)
+@env.task
+async def show_path(in_file: File) -> str:
+    """Print the local path of ``in_file`` and the file's size, and return the path."""
+    path = await in_file.download()
+    print(path, Path(path).stat().st_size)
+    return path
 
 
-@anat_env.task
-async def main(in_file: File, work_dir: str = "/work") -> None:
-    work = Path(work_dir) / "mriqc_flyte"
-    n4_outfile = await n4(in_file, work)
-    await print_local_path(n4_outfile)
+@env.task
+async def main(in_file: File, delete_workdir: bool = False) -> str:
+    """Run ``n4``, delete its folder if asked, then run ``show_path`` on its output."""
+    corrected = await n4(in_file)
+    if delete_workdir:
+        shutil.rmtree(Path(corrected.path).parent)
+
+    return await show_path(corrected)
