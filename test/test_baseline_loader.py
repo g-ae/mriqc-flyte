@@ -22,12 +22,39 @@
 #
 """Tests for the baseline_loader in src/mriqc_flyte/testing.py"""
 
+from pathlib import Path
+
 import pytest
 
+from mriqc_flyte.testing import baseline_node, find_result
 
-@pytest.mark.binaries
+
 @pytest.mark.baseline
-def test_baseline_loader():
-    from mriqc_flyte.testing import baseline_node
+def test_baseline_node_pre_n4():
+    node = baseline_node("run-1", "synthstrip_wf", "pre_n4")
+    assert Path(node["outputs"]["output_image"]).exists() and isinstance(node, dict)
 
-    assert isinstance(baseline_node(1, "synthstrip_wf", "pre_n4"), dict)
+
+@pytest.mark.baseline
+def test_baseline_node_tpms_std2t1w():
+    node = baseline_node("run-1", "SpatialNormalization", "tpms_std2t1w")
+
+    exists = [Path(v).exists() for v in node["outputs"]["output_image"]]
+    exists = set(exists)
+
+    assert exists.pop()
+
+
+def test_find_result_several(tmp_path):
+    for sub in ("a_wf", "b_wf"):
+        folder = tmp_path / "mriqc_wf" / sub / "smooth"
+        folder.mkdir(parents=True)
+        (folder / "result_smooth.pklz").touch()
+    with pytest.raises(RuntimeError, match="Too many files found"):  # a part of your message
+        find_result(tmp_path, "mriqc_wf", "smooth")
+
+
+def test_baseline_node_needs_the_mount(monkeypatch):
+    monkeypatch.setenv("MRIQC_FLYTE_BASELINE", "/elsewhere")
+    with pytest.raises(RuntimeError, match="Baseline environment variable must be set to .*"):
+        baseline_node("run-1", "synthstrip_wf", "pre_n4")
